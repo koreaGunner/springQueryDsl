@@ -169,6 +169,8 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom{
 
         //searchPageComplex보다 더 최적화 된 방법이다
         //특정 조건에서 count쿼리가 나가지 않는다
+        // > 전체 count가 첫번째 페이지의 개수보다 작을때
+        // > 마지막 페이지의 count가 한 페이지의 count보다 작을때
 //        return PageableExecutionUtils.getPage(content, pageable, () -> countQuery.fetchCount());
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchCount);
     }

@@ -2,11 +2,13 @@ package study.querydsl.repository;
 
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.util.StringUtils;
 import study.querydsl.dto.MemberSearchCondition;
 import study.querydsl.dto.MemberTeamDto;
@@ -120,6 +122,55 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom{
                 .fetchCount();
 
         return new PageImpl<>(content, pageable, total);
+    }
+
+    @Override
+    public Page<MemberTeamDto> searchPageComplex2(MemberSearchCondition condition, Pageable pageable) {
+        List<MemberTeamDto> content = queryFactory
+                .select(new QMemberTeamDto(
+                        member.id.as("memberId"),
+                        member.username,
+                        member.age,
+                        team.id.as("teamId"),
+                        team.name.as("teamName")
+                ))
+                .from(member)
+                .leftJoin(member.team, team)
+                .where(
+                        usernameEq(condition.getUsername()),
+                        teamNameEq(condition.getTeamName()),
+                        ageGoe(condition.getAgeGoe()),
+                        ageLoe(condition.getAgeLoe())
+                )
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        //count 쿼리를 굳이 나누는 이유
+        // > fetchResults로 하면 해당 쿼리와 동일한 count쿼리가 나가는데
+        //   쿼리를 나누면 count쿼리는 최적화할 수 있음.
+        //데이터가 별로 없으면 fetchResults 쓰는게 낫다
+        JPAQuery<MemberTeamDto> countQuery = queryFactory
+                .select(new QMemberTeamDto(
+                        member.id.as("memberId"),
+                        member.username,
+                        member.age,
+                        team.id.as("teamId"),
+                        team.name.as("teamName")
+                ))
+                .from(member)
+                .leftJoin(member.team, team)
+                .where(
+                        usernameEq(condition.getUsername()),
+                        teamNameEq(condition.getTeamName()),
+                        ageGoe(condition.getAgeGoe()),
+                        ageLoe(condition.getAgeLoe())
+                );
+
+        //searchPageComplex보다 더 최적화 된 방법이다
+        //특정 조건에서 count쿼리가 나가지 않는다
+//        return PageableExecutionUtils.getPage(content, pageable, () -> countQuery.fetchCount());
+        return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchCount);
     }
 
     private BooleanExpression usernameEq(String username) {
